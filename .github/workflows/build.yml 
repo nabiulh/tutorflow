@@ -1,0 +1,85 @@
+name: Build TutorFlow APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: latest
+          cache: true
+
+      - name: Generate Android platform files
+        run: flutter create --platforms=android .
+
+      - name: Configure TutorFlow Android package
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          if manifest.exists():
+              text = manifest.read_text()
+              text = text.replace(
+                  'android:label="tutorflow"',
+                  'android:label="টিউটর ফ্লো"'
+              )
+              manifest.write_text(text)
+
+          gradle = Path("android/app/build.gradle")
+          if gradle.exists():
+              text = gradle.read_text()
+              text = text.replace(
+                  "namespace 'com.example.tutorflow'",
+                  "namespace 'com.chcuvuh.tutorflow'"
+              )
+              text = text.replace(
+                  "applicationId 'com.example.tutorflow'",
+                  "applicationId 'com.chcuvuh.tutorflow'"
+              )
+              gradle.write_text(text)
+
+          gradle_kts = Path("android/app/build.gradle.kts")
+          if gradle_kts.exists():
+              text = gradle_kts.read_text()
+              text = text.replace(
+                  'namespace = "com.example.tutorflow"',
+                  'namespace = "com.chcuvuh.tutorflow"'
+              )
+              text = text.replace(
+                  'applicationId = "com.example.tutorflow"',
+                  'applicationId = "com.chcuvuh.tutorflow"'
+              )
+              gradle_kts.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze project
+        run: flutter analyze
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutorflow-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
